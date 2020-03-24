@@ -1,0 +1,145 @@
+---
+title: "Statistical inference with the GSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+This report will use the provided dataset of the General Social Survey (GSS) to put into practice the acquired knowledge in the second specialization of the Statistics with R course, offered by Duke University.
+
+To help us out here, the following packages are loaded in: `dplyr` is used to explore the data and `ggplot2` is used to make the visualizations to help analyse the data.
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+```
+
+### Load data
+
+Next up, the dataset is loaded into Rstudio.
+
+```{r load-data}
+load("gss.Rdata")
+```
+
+* * *
+
+## Part 1: Data
+
+The GSS in their own words: "The GSS gathers data on contemporary American society in order to monitor and explain trends and constants in attitudes, behaviors, and attributes. [...] The GSS contains a standard core of demographic, behavioral, and attitudinal questions, plus topics of special interest. Among the topics covered are civil liberties, crime and violence, intergroup tolerance, morality, national spending priorities, psychological well-being, social mobility, and stress and traumatic events."
+
+The name already says it, the dataset comes from a survey, meaning the data is observational. This also means that causality cannot be concluded from this dataset, although strong indications can result from analysis. Still, later studies should still confirm that findings indeed arose from a causal relationship.
+
+As stated in the Codebook, the dataset used in this analysis is slightly altered from the original data as missing values have been removed and some factor variables have been added. This does not have an impact on the value of the results however.
+
+* * *
+
+## Part 2: Research question
+
+Has the mean inflation-adjusted family income changed between 1980 and 2010?
+
+This means that the null hypothesis is that there is no change, or mean_1980 - mean_2010 = 0
+
+Alternative hypothesis: mean_1980 - mean_2010 ??? 0
+
+An answer to this question can be of use since family income is often used a parameter of wealth of a nation. Thus it could be an indication if the wealth of the United States has changed over those thirty years. 
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+To start off, let's plot the variables we are going to analyse and check their shape and some of their summary statistics.
+
+Let's start with the inflation adjusted income.
+
+```{r}
+ggplot(gss, aes(coninc)) + geom_histogram()
+
+summary(gss$coninc)
+```
+
+This is the data from all of the years and it shows a clear right skew. This can be explained by the fact that there are a few people who have a lot of income and thus increase the mean significantly. This is also evident in the fact that the mean is quite a bit higher than the median.
+
+```{r}
+ggplot(gss, aes(year)) + geom_histogram()
+
+summary(gss$year)
+```
+
+This plot, however not really relevant to our analysis, shows that there is quite some variation in the number of responses to the survey per year. It does show that the number of responses was a little bit higher in 2010 than in 1980, though this should not interfere with our analysis too much and around 1500 and around 2000 datapoints should be more than enough while still being well below 10% of the complete population, satisfying the first condition of inference (because of random sampling, the groups of 1980 and 2010 can also be regarded as independent).
+
+Now it is time to set up the data frames for the analysis.
+
+```{r}
+data_1980 <- subset(gss, year == 1980)
+data_2010 <- subset(gss, year == 2010)
+
+data_for_inference <- rbind(data_1980, data_2010)
+```
+
+Now that the datasets have been set up for analysis, let's explore them a little bit.
+
+```{r}
+ggplot(data_1980, aes(coninc)) + geom_histogram()
+
+summary(data_1980$coninc)
+```
+
+```{r}
+ggplot(data_2010, aes(coninc)) + geom_histogram()
+
+summary(data_2010$coninc)
+```
+
+From these plots it becomes clear that the data is not really normally distributed and that there are some values of family income that have no datapoints. The third quantile is still close to the big 'bulk' of data in both plots and the t-test is also quite resistant to this so there should be no problems in the analysis.
+
+At first sight, one can already see that the mean and median of the 2010 data is slightly higher. Further analysis should of course still prove if this difference is significant and not due to mere chance.
+
+
+* * *
+
+## Part 4: Inference
+
+### Hypotheses
+Null hypothesis is that there is no change in the means, or $H_0 = mean_1980 - mean_2010 = 0$
+
+The alternative hypothesis is that there is a change in the means, or $H_A = mean_1980 - mean_2010 ??? 0$
+
+### Check Conditions
+The conditions for inference on mean are threefold:
+
+#### Condition 1: Random sample
+The data is obtained from a random sampling survey so this condition can be treated as met.
+
+#### Condition 2: Being nearly normally distributed
+As the plots show, the data cannot be regarded as being (nearly) normally distributed, but the sample size is clearly more than 30. This means, through the Central Limit Theorem, that we can still treat the sampling distribution of the mean as normal.
+
+#### Condition 3: The individual observations should be independent
+Since random sampling was applied and the sample size is clearly smaller than the total US population, this condition is also met.
+
+#### Further inference
+
+The method used for inference is theoretical. The variable for inference is the family income which fits all the conditions and therefore a theoretical model can be used.
+
+```{r}
+inference(y = coninc, x = year, data = data_for_inference, statistic = "mean", type = "ht", null = 0, 
+          alternative = "twosided", method = "theoretical")
+```
+
+From this output it becomes clear that the resulting p-value is 0.1823, which is more than 0.05, the 'magical' value. This means that this data shows no significant relationship between the year 1980 and 2010. Therefore, the null hypotheses is accepted. This, however, does not mean that a relation doesn't exist, it just means that this data does not show a significant relation. 
+
+```{r}
+inference(y = coninc, x = year, data = data_for_inference, statistic = "mean", type = "ci", null = 0, 
+          alternative = "twosided", method = "theoretical")
+
+```
+
+From this confidence interval summary, one can derive that 0, or no difference, falls indeed within the 95% confidence interval of data. This further solidifies the conclusion that this data indeed does not show a significant relationship between the year and the family income.

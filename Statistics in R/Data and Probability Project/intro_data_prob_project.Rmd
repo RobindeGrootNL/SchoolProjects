@@ -1,0 +1,152 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+rutime: shiny
+---
+
+## Setup
+
+This report will use the provided dataset of the Behavioural Risk Factor Surveillance system (BRFSS) to put into practice the acquired knowledge in the first specialization of the Statistics with R course, offered by Duke University.
+
+To help us out here, the following packages are loaded in: `dplyr` is used to explore the data and `ggplot2` is used to make the visualizations to help analyse the data.
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+```
+
+### Load data
+
+The dataset was downloaded from the course page on Coursera and it is saved in the same folder as this markdown file to make it easily accessible from within RStudio. It is loaded into this document using the `load` command.
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+As mentioned before, the BRFSS dataset is used for this exploration into statistics. The accompanying explanatory document gives a good overview of the different variables. For illustrative purposes (although the practicality of it is based on personal opinion), a small piece of code was added to show how many different values each variable contains. For a better overview, the reader is referred to the aforementioned explanatory document.
+
+It does become clear that many of the variables are of the categorical type since there is a limited number of possibilities, which would be unlikely when considering a numerical variable, and even more unlikely when specifically discussing a continuous variable.
+
+It can be seen that almost all the states are incorporated in the survey with only a few missing, even some overseas territories are included. This gives the impression that there is little/no geographical bias in the data and it thus should generalize well to the United States in general. However, the survey is on a voluntary basis and is conducted through random-digit dialling according to the [website of the CDC](https://www.cdc.gov/brfss/about/brfss_faq.htm). This could result that a certain group of people will participate in the survey and that other groups immediately end the connection. It also means that random sampling was used. This also rules out the convenience sampling.
+
+Surveying also means that the study is an observational one. This means that associations within this data cannot immediately be attributed to causation since there might be other factors that are not taken into account. Thus the results can only imply correlation but later research could incorporate an experiment where those other factors can be controlled for.
+
+Finally, the subjects in the survey can be considered as independent since the surveyed population is certainly less than 10% of the complete population. 491,773 people were surveyed and there were definitely more than 49,177,300 people living in the United States in 2013, the year of the survey. The rubric asks for a discussion of random assignment, which seems to not be applicable since this study is an observational one and not an experiment, with the latter such assignment is indeed relevant but not regarding this study and therefore random assignment was not used.
+
+
+```{r}
+sapply(brfss2013, function(x) length(unique(x)))
+```
+
+* * *
+
+## Part 2: Research questions
+
+**Research quesion 1:**
+
+What is there a difference in mean sleep time between male residents of New York State and California?
+
+This can be of interest for seeing if the state someone lives in has in some form or way an (indirect) impact on the number of hours of sleep a male person gets.
+
+**Research quesion 2:**
+
+Is the chance on a bad physical health day higher or lower than 50%?
+
+This question can shine a light on the apparent chance on having a bad physical health day.
+
+**Research quesion 3:**
+
+Is there an apparent relation between having ever being told that blood cholesterol is high and having ever been told that the blood pressure is high?
+
+This answer can be of great value to determine if cholesterol is of effect on blood pressure. Research has found this out a long time ago of course but it would be interesting to see if this data reflects this. 
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+**Research question 1:**
+
+First, it is handy to see how sleep time is distributed in general.
+
+```{r}
+ggplot(brfss2013, aes(sleptim1)) + geom_histogram(binwidth = 1) + coord_cartesian(xlim = c(0,24))
+summary(brfss2013$sleptim1)
+```
+
+The sleep time data seems to be rather normally distributed and the mean and median being very similar also solidifies this claim.
+
+New data frames should be created to test this research question.
+
+```{r}
+sleep_time_cali <- subset(brfss2013, X_state == "California")
+sleep_time_NYS <- subset(brfss2013, X_state == "New York")
+```
+
+These new data frames should be checked for their distribution and summary statistics.
+
+```{r}
+ggplot(sleep_time_cali, aes(sleptim1)) + geom_histogram()
+summary(sleep_time_cali$sleptim1)
+```
+
+```{r}
+ggplot(sleep_time_NYS, aes(sleptim1)) + geom_histogram()
+summary(sleep_time_NYS$sleptim1)
+
+```
+
+Both the histograms look rather similar and it is not immediately easy to tell if there is a difference between the states. Looking at the summary statistics gives a clearer view of the situation. The median and the quantiles are exactly similar for both states, but this can also be attributed to the fact that the values only take on integer values.
+
+The means of both states are different however, with California sporting a slightly higher average number of hours of sleep. The difference is only 0.181 however, which is really small, and significance is not tested yet. This can be tested using inference which will be taught in the next specialization. The answer to the research question still stands at: There is indeed a (small) difference in the means of both states with California sporting the slightly higher average sleep time.
+
+**Research question 2:**
+
+To answer this question, we should determine what a distribution of the number of bad physical days looks like when the chance is 50%. This can be achieved through comparing the mean of the data to what the mean would be when the chance would be 50%.
+
+First, let's plot the distribution of bad physical days in the dataset
+
+```{r}
+ggplot(brfss2013, aes(physhlth)) + geom_histogram()
+summary(brfss2013$physhlth)
+```
+
+It is clear that most people did not experience a day in the month previous to the survey in which they did not feel physically well. This is substantiated by the median being at 0.
+
+The graph would have a normally distributed or normal shape when the chance would be 50% with the mean being at 15 (half of the days).
+
+This is clearly not the case for the histogram above. The mean is also at 0, which is a big departure from 15. Therefore it can be safely concluded that the chance of being physically unwell is not 50%, which is a positive thing to take away.
+
+
+**Research question 3:**
+
+To answer this research question, oth variables will be explored and the ratio of yes to no will be calculated
+
+```{r}
+table(brfss2013$toldhi2)
+ratio_cholesterol <- 183501 / (183501+236610)
+ratio_cholesterol
+```
+
+```{r}
+table(brfss2013$bphigh4)
+ratio_bloodpressure <- 198921 / (198921+282687)
+ratio_bloodpressure
+```
+
+Small note: For blood pressure, answers diverting from "yes" or "no" were left out for ease of analysis and considering their small numbers, this probably does not have a major effect on the outcome.
+
+The two calculated ratios are very similar. 0.4368 and 0.4130 are close together and this suggests that there is indeed a perceived relationship between high blood pressure and high cholesterol levels. If this research was the first to look into this relationship, it could be used in medical science, but fortunately medical science has looked into this before. Still it provides further proof that there is indeed a relationship.
+

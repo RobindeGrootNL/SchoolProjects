@@ -1,0 +1,305 @@
+---
+title: "Modeling and prediction for movies"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+This report will use the provided dataset of the movies dataset with randomly sampled movies from Rotten Tomatoes and IMDb and a number of their features. This assignment is part of Linear Regression, the third specialization of the Statistics with R course, offered by Duke University.
+
+To help us out here, the following packages are loaded in: `dplyr` is used to explore the data and `ggplot2` is used to make the visualizations to help analyse the data.
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+library(stringr)
+```
+
+### Load data
+
+Next up, the dataset is loaded into Rstudio.
+
+```{r load-data}
+load("movies.Rdata")
+```
+
+* * *
+
+## Part 1: Data
+
+The dataset consists of 651 randomly sampled movies with 32 distinguished features, the features originating from the Internet Movie Database (IMDb) and Rotten Tomatoes, which is another movie information site that includes aggregated reviews and scores movies using its "Tomatometer".
+
+The features include the movie features themselves (e.g. movie name, runtime, genre, release year, actors, director), features specific to IMDb and Rotten Tomatoes (e.g. critics ratings, audience ratings, urls), and other features like mpaa_rating and nominations for movie awards.
+
+Several of these features are likely unusable for linear regression as they don't appear often or are meaningless to regression. Examples of these are the actors names, which will not come back more than a few times at most, and the website URLs for IMDb and Rotten Tomatoes.
+
+The dataset was randomly sampled from the aforementioned two websites. Although there are quite a lot of features in the dataset, this study is still an observational one, making it impossible to conclude with certainty that there is causation between the features. The dataset is certainly less than 10% of the total population, or number of movies on both websites.
+
+* * *
+
+## Part 2: Research question
+
+**Can the audience score on Rotten Tomatoes of a movie be accurately predicted by the runtime, theatre release year, month, day, DVD release year, month, day, IMDb rating, IMDb number of votes, and critics score of a movie?**
+
+The word predicted is used in order to account for the lack of possibility of causal conclusions but that there is still room for chance. The number of awards a movie has won is not in the database already and will be created form a count of the awards in the database.
+
+And answer to this question can be relevant for a movie crew to estimate their reception of the audience considering the features of the movie they have just produced. They could also take it a step further by taking a step back by seeing when to launch their movie, what its runtime should be etc. This is not something necessarily supported by the model as causality is still unknown. Still it could be an indication.
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+The variables of the research question were chosen since they are numerical or ordinally categorical and already saved as numbers. Other categorical variables can also be used in regression, but this involves dummy coding, which I deem outside the scope of this course and assignment due to it not being in any of the videos/labs and only 2 hours standing for this assignment.
+
+First off, a new dataframe is created with all the variables in the research question in it. This makes it easier to plug it into analysis functions of R. The following chunk contains the code to do so and already some preliminary analysis. (If you know a better and cleaner way to code the new dataframe, please let me know so I can clean up my code.)
+
+A new variable for the number of awards won by a movie is also created and added to the created dataframe.
+
+```{r}
+initial_explanatory_var <- data.frame(movies$runtime, movies$thtr_rel_year, movies$thtr_rel_month, movies$thtr_rel_day, movies$dvd_rel_year, movies$dvd_rel_month, movies$dvd_rel_day, movies$imdb_rating, movies$imdb_num_votes, movies$critics_score, movies$audience_score)
+
+summary(initial_explanatory_var)
+```
+
+The summary function gives an overview of the mean, median, and spread of the data. Nothing besides the number of votes stands out from the rest. The mean and median of the number of votes is significantly different. The mean is significantly higher and almost equivalent to the third quantile. This means that the data for the number of votes on IMDb for the audience score is strongly right skewed. This observation should not impact the applicability of linear regression as it does not matter if an independent variable is not normally distributed.
+
+```{r}
+cor(initial_explanatory_var, use = "everything", method = c("pearson"))
+```
+
+From the correlation function's output, it can be seen that there are few variables with quite a strong correlation with one another. The values "1" are the correlations the variables have with themselves, thus naturally they are "1". The movie audience score can be seen to correlate well with IMDb rating already, which can be explained by the way the IMDb rating is acquired: The audience of the website votes for the rating the movie gets, similarly with how the audience rating on Rotten Tomatoes is acquired. This is why this variable is not used for the model. 
+
+### Some more data exploration
+
+```{r}
+ggplot(initial_explanatory_var, aes(initial_explanatory_var$movies.thtr_rel_year)) + geom_histogram()
+
+summary(initial_explanatory_var$movies.thtr_rel_year)
+
+```
+
+From this plot it can be seen that most of the movies in the dataset were released in the late 1990s and in the 21st century. Still, the earlier summary statistic shows that, although there is a clear left skew, the quantiles are still relatively well-spread.
+
+```{r}
+ggplot(initial_explanatory_var, aes(initial_explanatory_var$movies.thtr_rel_month)) + geom_histogram()
+
+summary(initial_explanatory_var$movies.thtr_rel_month)
+
+```
+
+This plot shows that there are certain months in which more movies premiere. Holiday season and summer seem especially popular, and the former also being close to the academy awards, which gives studios additional incentive to have a movie premiere during that period.
+
+```{r}
+ggplot(initial_explanatory_var, aes(initial_explanatory_var$movies.audience_score)) + geom_histogram()
+
+summary(initial_explanatory_var$movies.audience_score)
+
+```
+
+This final plot shows that most movies have at least received a score of 60, with the median being at 65. This is important to note for later since a score of a sufficient is thus more likely than an insufficient.
+
+
+* * *
+
+## Part 4: Modeling
+
+Now that the potential variables are determined, we can start with building the model. The method used is the one of forward adjusted R2. This means that, at every step, the variable that adds the most to the adjusted R2 value is added to the model until no variable adds to the adjusted R2 value. The adjusted R2 value is chosen over the p-value as a determinant due to the predictions of the model being deemed more important that the significance.
+
+The variables still in play to predict the audience score are runtime, theatre release year, month, day, DVD release year, month, day, IMDb number of votes, and critics score. A model with these variables will lead to the highest R2 score but not necessarily the highest adjusted R2 value.
+
+```{r}
+m1 <- lm(movies$audience_score ~ movies$runtime, movies)
+summary(m1)$adj.r.squared
+
+m2 <- lm(movies$audience_score ~ movies$thtr_rel_year, movies)
+summary(m2)$adj.r.squared
+
+m3 <- lm(movies$audience_score ~ movies$thtr_rel_month, movies)
+summary(m3)$adj.r.squared
+
+m4 <- lm(movies$audience_score ~ movies$thtr_rel_day , movies)
+summary(m4)$adj.r.squared
+
+m5 <- lm(movies$audience_score ~ movies$dvd_rel_year, movies)
+summary(m5)$adj.r.squared
+
+m6 <- lm(movies$audience_score ~ movies$dvd_rel_month, movies)
+summary(m6)$adj.r.squared
+
+m7 <- lm(movies$audience_score ~ movies$dvd_rel_day, movies)
+summary(m7)$adj.r.squared
+
+m8 <- lm(movies$audience_score ~ movies$imdb_num_votes, movies)
+summary(m8)$adj.r.squared
+
+m9 <- lm(movies$audience_score ~ movies$critics_score, movies)
+summary(m9)$adj.r.squared
+
+```
+
+Even though this method of immediately giving summary data might not be the best looking, it provides a quick overview of the adjusted R2 values. From this first round it is clear that the critics score increases the adjusted R2 value the most and is therefore included in the model. The names of future models will start with 'm9' to make it clear that those models are derived from this original model.
+
+```{r}
+m91 <- lm(movies$audience_score ~ movies$critics_score + movies$thtr_rel_year, movies)
+summary(m91)$adj.r.squared
+
+m92 <- lm(movies$audience_score ~ movies$critics_score + movies$thtr_rel_month, movies)
+summary(m92)$adj.r.squared
+
+m93 <- lm(movies$audience_score ~ movies$critics_score+ movies$thtr_rel_day , movies)
+summary(m93)$adj.r.squared
+
+m94 <- lm(movies$audience_score ~ movies$critics_score + movies$dvd_rel_year, movies)
+summary(m94)$adj.r.squared
+
+m95 <- lm(movies$audience_score ~ movies$critics_score + movies$dvd_rel_month, movies)
+summary(m95)$adj.r.squared
+
+m96 <- lm(movies$audience_score ~ movies$critics_score + movies$dvd_rel_day, movies)
+summary(m96)$adj.r.squared
+
+m97 <- lm(movies$audience_score ~ movies$critics_score + movies$imdb_num_votes, movies)
+summary(m97)$adj.r.squared
+
+m98 <- lm(movies$audience_score ~ movies$critics_score + movies$runtime, movies)
+summary(m98)$adj.r.squared
+```
+
+Now it is clear that the number of votes on IMDb increases the adjusted R2 value the most and we will move on with this value and do another round. Since the model number was 'm97', future models will start with this name.
+
+```{r}
+m971 <- lm(movies$audience_score ~ movies$critics_score + movies$thtr_rel_year + movies$imdb_num_votes, movies)
+summary(m971)$adj.r.squared
+
+m972 <- lm(movies$audience_score ~ movies$critics_score + movies$thtr_rel_month + movies$imdb_num_votes, movies)
+summary(m972)$adj.r.squared
+
+m973 <- lm(movies$audience_score ~ movies$critics_score+ movies$thtr_rel_day + movies$imdb_num_votes, movies)
+summary(m973)$adj.r.squared
+
+m974 <- lm(movies$audience_score ~ movies$critics_score + movies$dvd_rel_year + movies$imdb_num_votes, movies)
+summary(m974)$adj.r.squared
+
+m975 <- lm(movies$audience_score ~ movies$critics_score + movies$dvd_rel_month + movies$imdb_num_votes, movies)
+summary(m975)$adj.r.squared
+
+m976 <- lm(movies$audience_score ~ movies$critics_score + movies$dvd_rel_day + movies$imdb_num_votes, movies)
+summary(m976)$adj.r.squared
+
+m977 <- lm(movies$audience_score ~ movies$critics_score + movies$runtime + movies$imdb_num_votes, movies)
+summary(m977)$adj.r.squared
+
+```
+
+Model 'm974' is now the best model with an adjusted R2 value of 0.518111. This means that the critics score, IMDb number of votes, and the DVD release year are now part of the model.
+
+```{r}
+m9741 <- lm(movies$audience_score ~ movies$critics_score + movies$thtr_rel_year + movies$imdb_num_votes + movies$dvd_rel_year, movies)
+summary(m9741)$adj.r.squared
+
+m9742 <- lm(movies$audience_score ~ movies$critics_score + movies$thtr_rel_month + movies$imdb_num_votes + movies$dvd_rel_year, movies)
+summary(m9742)$adj.r.squared
+
+m9743 <- lm(movies$audience_score ~ movies$critics_score+ movies$thtr_rel_day + movies$imdb_num_votes + movies$dvd_rel_year, movies)
+summary(m9743)$adj.r.squared
+
+m9744 <- lm(movies$audience_score ~ movies$critics_score + movies$dvd_rel_month + movies$imdb_num_votes + movies$dvd_rel_year, movies)
+summary(m9744)$adj.r.squared
+
+m9745 <- lm(movies$audience_score ~ movies$critics_score + movies$dvd_rel_day + movies$imdb_num_votes + movies$dvd_rel_year, movies)
+summary(m9745)$adj.r.squared
+
+m9746 <- lm(movies$audience_score ~ movies$critics_score + movies$runtime + movies$imdb_num_votes + movies$dvd_rel_year, movies)
+summary(m9746)$adj.r.squared
+
+```
+
+The addition of the variable theatre release year seems to increase the predictive value of the model slightly so it is taken into the model and another round of computations is ran.
+
+```{r}
+m97411 <- lm(movies$audience_score ~ movies$critics_score + movies$thtr_rel_month + movies$imdb_num_votes + movies$dvd_rel_year + movies$thtr_rel_year, movies)
+summary(m97411)$adj.r.squared
+
+m97412 <- lm(movies$audience_score ~ movies$critics_score+ movies$thtr_rel_day + movies$imdb_num_votes + movies$dvd_rel_year + movies$thtr_rel_year, movies)
+summary(m97412)$adj.r.squared
+
+m97413 <- lm(movies$audience_score ~ movies$critics_score + movies$dvd_rel_month + movies$imdb_num_votes + movies$dvd_rel_year + movies$thtr_rel_year, movies)
+summary(m97413)$adj.r.squared
+
+m97414 <- lm(movies$audience_score ~ movies$critics_score + movies$dvd_rel_day + movies$imdb_num_votes + movies$dvd_rel_year + movies$thtr_rel_year, movies)
+summary(m97414)$adj.r.squared
+
+m97415 <- lm(movies$audience_score ~ movies$critics_score + movies$runtime + movies$imdb_num_votes + movies$dvd_rel_year + movies$thtr_rel_year, movies)
+summary(m97415)$adj.r.squared
+
+```
+
+Again, just a slight improvement, but since the adjusted R2 value penalizes for extra variables, the increase should still be noted and the variable of dvd release day should still be used in the model. And thus the search for the optimal/parsimonious model continues...
+
+```{r}
+m974141 <- lm(movies$audience_score ~ movies$critics_score + movies$thtr_rel_month + movies$imdb_num_votes + movies$dvd_rel_year + movies$thtr_rel_year + movies$dvd_rel_day, movies)
+summary(m974141)$adj.r.squared
+
+m974142 <- lm(movies$audience_score ~ movies$critics_score+ movies$thtr_rel_day + movies$imdb_num_votes + movies$dvd_rel_year + movies$thtr_rel_year + movies$dvd_rel_day, movies)
+summary(m974142)$adj.r.squared
+
+m974143 <- lm(movies$audience_score ~ movies$critics_score + movies$dvd_rel_month + movies$imdb_num_votes + movies$dvd_rel_year + movies$thtr_rel_year + movies$dvd_rel_day, movies)
+summary(m974143)$adj.r.squared
+
+m974144 <- lm(movies$audience_score ~ movies$critics_score + movies$runtime + movies$imdb_num_votes + movies$dvd_rel_year + movies$thtr_rel_year + movies$dvd_rel_day, movies)
+summary(m974144)$adj.r.squared
+
+```
+
+The adjusted R2 value does not increase anymore from adding one of the other variables and therefore, from the chosen variables, the parsimonious model has been found to consist of the following variables: critics_score, dvd_rel_day, imdb_num_votes, dvd_rel_year, thtr_rel_year. 
+
+```{r}
+summary(m97414)
+```
+
+From these summary statistics, the formula for the model can be derived. It is also apparent that the p-value is extremely low, meaning the null hypothesis that the variables do not possess any predictive value can be safely rejected.
+
+The formula in the end is: $y = 903.4 + 0.4809 * critics score + 0.07299 * dvd rel day + 2.740e-5 * imdb num votes - 0.5506 * dvdrelyear + 0.1162 * thtr rel year$
+
+Especially, the imdb numer of votes only contributes a very slight amount to the slope of the formula judging from its slope coefficient. The other coefficients contribute all in around the same order of magnitude.
+
+* * *
+
+## Part 5: Prediction
+
+To test the predictions of the model, the movie Suicide Squad will be used. The movie came out in 2016 and received contrasting critics and audience reviews. Critics universally panned the movies whereas audiences indicated moderate positivity towards the film. 
+
+The values for the movie to be filled into the formula are:
+
+```{r}
+SS_critic <- 48
+SS_dvd_day <- 13 #13th of December 2016
+SS_imdb_votes <- 486792
+SS_dvd_year <- 2016
+SS_thtr_year <- 2016
+
+predicted_audience_score <- 903.4 + 0.4809 * SS_critic + 0.07299 * SS_dvd_day + 2.740e-5 * SS_imdb_votes - 0.5506 * SS_dvd_year + 0.1162 * SS_thtr_year
+
+predicted_audience_score
+```
+
+Thus, the model predicts an audience score on Rotten Tomatoes of 65. The actual score is a 3.5/5, which equates to a 70/100. This means that the model comes quite close to predicting this movie's score.
+
+####References for the prediction
+https://www.rottentomatoes.com/m/suicide_squad_2016
+https://www.imdb.com/title/tt1386697/?ref_=nv_sr_1
+
+* * *
+
+## Part 6: Conclusion
+
+Thus, it can be concluded that the audience score on Rotten Tomatoes indeed can be (at least partially) predicted by the mentioned variables. Not all of the originally mentioned variables ended up in the formula, but at first it was not known what variable contributed what to the predictive value of the model. 
+
+Still, the adjusted P2 value of the model did not come above 0.52, meaning that only 52% of the variation in the data can be explained by the model. This means that other variables also play a role and more research should be done into those to get closer to 100%. This research could include adding more features, for example adding in the categorical variables that were left out in this study. 

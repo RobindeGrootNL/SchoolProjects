@@ -1,0 +1,136 @@
+---
+title: "Bayesian modeling and prediction for movies"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+This report will use the provided dataset of the movies dataset with randomly sampled movies from Rotten Tomatoes and IMDb and a number of their features. This assignment is part of Bayesian Statistics, the fourth specialization of the Statistics with R course, offered by Duke University.
+
+To help us out here, the following packages are loaded in: `dplyr` is used to explore the data, `ggplot2` is used to make the visualizations to help analyse the data, `statsr` is the companion package for the Coursera course, and `BAS` (Bayesian Adaptive Sampling) for variable selection and model averaging.
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+library(BAS)
+```
+
+### Load data
+
+Next up, the dataset is loaded into Rstudio.
+
+```{r load-data}
+load("movies.Rdata")
+```
+
+* * *
+
+## Part 1: Data
+
+The dataset consists of 651 randomly sampled movies with 32 distinguished features, the features originating from the Internet Movie Database (IMDb) and Rotten Tomatoes, which is another movie information site that includes aggregated reviews and scores movies using its "Tomatometer".
+
+The features include the movie features themselves (e.g. movie name, runtime, genre, release year, actors, director), features specific to IMDb and Rotten Tomatoes (e.g. critics ratings, audience ratings, urls), and other features like mpaa_rating and nominations for movie awards.
+
+The dataset was randomly sampled from the aforementioned two websites. Although there are quite a lot of features in the dataset, this study is still an observational one, making it impossible to conclude with certainty that there is causation between the features. The dataset is certainly less than 10% of the total population, or number of movies on both websites.
+
+
+* * *
+
+## Part 2: Data manipulation
+
+Some of the variables for the regression are not in the dataset itself but need to be created using R coding first. This concerns the following variables: `feature_film`, `drama`, `mpaa_rating_R`, `oscar_season`, `summer_season`.
+
+```{r}
+movies$feature_film <- ifelse(movies$title_type == "Feature Film", c("yes"), c("no"))
+
+movies$drama <- ifelse(movies$genre == "Drama", c("yes"), c("no"))
+
+movies$mpaa_rating_R <- ifelse(movies$mpaa_rating == "R", c("yes"), c("no"))
+
+movies$oscar_season <- ifelse(movies$thtr_rel_month == 10 | movies$thtr_rel_month == 11 | movies$thtr_rel_month == 12, c("yes"), c("no"))
+
+movies$summer_season <- ifelse(movies$thtr_rel_month == 5 | movies$thtr_rel_month == 6 | movies$thtr_rel_month == 7 | movies$thtr_rel_month == 8, c("yes"), c("no"))
+```
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+First, let's see how the audience score is distributed.
+
+```{r}
+ggplot(movies, aes(audience_score)) + geom_histogram()
+```
+
+The audience score feature of the dataset is clearly left skewed and almost looks like a horizontally flipped Poisson distribution.
+
+An overview of a model with all the variables that should be considered can also gives us some information already.
+
+```{r}
+m_audscore_full = lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + oscar_season + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_pic_win + best_actor_win + best_actress_win + best_dir_win + top200_box, data = movies)
+
+summary(m_audscore_full)
+```
+
+This full model shows that about 3/4 of the varience in the data can be explained by these variables. Many of the variables have a slope close to the order of magnitude of one, although some have much slimmer or bigger influences on the audience_score. We will see later if this translates into inclusion in the final model.
+
+* * *
+
+## Part 4: Modeling
+
+The modelling technique used is Bayesian Model Averaging. This to take into account that several models might be fitting.
+
+```{r}
+bma_audscore = bas.lm(audience_score ~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + oscar_season + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_pic_win + best_actor_win + best_actress_win + best_dir_win + top200_box, data = movies, prior = "BIC", modelprior = uniform())
+bma_audscore
+
+summary(bma_audscore)
+```
+
+The model that seems the best fit for the data using the least variables is model 1 which incorporates the variables: `runtime`, `imdb_rating`, and `critics_score`.
+
+```{r}
+confint(coefficients(bma_audscore))
+```
+
+The preceding information is the 95% credible interval for the coefficients.
+
+For runtime, a shorter movie seems to correlate with a higher audience score, though the coefficient is rather small.
+
+For IMDb rating, a higher rating correlates positively with the audience score, which is logical since the IMDb score is also an audience score, just from another website than Rotten Tomatoes.
+
+For critics score, a higher critics score seems to result in a slightly higher audience score as well.
+
+* * *
+
+## Part 5: Prediction
+
+The movie we are going to predict the audience score for is Moonlight, the academy award winner of 2016.
+
+```{r}
+moonlight = -0.00415 * 111 + 15.0 * 7.4 + 0.005 * 90
+moonlight
+```
+
+The real value for audience score is a 80 out of 100, meaning that the value is quite far off and actually impossible. This puts questionmarks at the fittingness of the model.
+
+References for data:
+https://www.imdb.com/title/tt4975722/?ref_=ttfc_fc_tt
+https://www.rottentomatoes.com/m/moonlight_2016
+
+
+* * *
+
+## Part 6: Conclusion
+
+The conclusion is that runtime, imdb_rating, and critic score make for the best model considering BIC. Still, other models are quite good as well and those combine to a nice BMA model.
+
+A shortcoming of this model is that it ends up not predicting that well. This can be improved by being more exact with the coefficients.
