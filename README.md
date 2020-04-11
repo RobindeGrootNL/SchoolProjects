@@ -1,2 +1,2 @@
 # SchoolProjects
-Some of the projects I did for courses during my studies.
+This repository contains some of the projects I worked on during my Bachelor and Master degrees.
